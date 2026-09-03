@@ -1,0 +1,16 @@
+name: Build VoodooPS2
+on: [workflow_dispatch, push]
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap VoodooInput
+        run: |
+          src=$(curl -Lfs https://raw.githubusercontent.com/acidanthera/VoodooInput/master/VoodooInput/Scripts/bootstrap.sh) && eval "$src"
+      - name: Build
+        run: xcodebuild -project VoodooPS2.xcodeproj -scheme ALL -configuration Release build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VoodooPS2-kexts
+          path: build/Release/*.kext
