@@ -690,8 +690,32 @@ void ApplePS2ALPSGlidePoint::alps_process_packet_v1_v2(UInt8 *packet) {
 
     // fingers = z > 30 ? 1 : 0;
 
-    if (z > 30)
-        voodooTrackpoint(kIOMessageVoodooTrackpointRelativePointer, x, y, buttons);
+    // NOTE: x/y decoded above are ABSOLUTE finger positions from the packet,
+    // not deltas. voodooTrackpoint's RelativePointer message expects a delta.
+    // Track the last absolute position per touch and send (x - lastx, -(y - lasty))
+    // instead of the raw absolute coordinate. The Y sign flip matches the
+    // correction already applied to the trackstick branch above (dy = -(...))
+    // and the explicit "y_max - y" flip used for V3-V5 in this same file;
+    // the V1/V2 path was simply missing both the delta and the flip.
+    static int lastAlpsV1V2X = 0;
+    static int lastAlpsV1V2Y = 0;
+    static bool alpsV1V2TouchActive = false;
+
+    if (z > 30) {
+        int dx = 0, dy = 0;
+        if (alpsV1V2TouchActive) {
+            dx = x - lastAlpsV1V2X;
+            dy = -(y - lastAlpsV1V2Y);
+        }
+        lastAlpsV1V2X = x;
+        lastAlpsV1V2Y = y;
+        alpsV1V2TouchActive = true;
+        voodooTrackpoint(kIOMessageVoodooTrackpointRelativePointer, dx, dy, buttons);
+    } else {
+        // Finger lifted (or not pressing hard enough) - reset so the next
+        // touch-down doesn't compute a huge jump from a stale last position.
+        alpsV1V2TouchActive = false;
+    }
 
     if (priv.flags & ALPS_WHEEL) {
         int scrollAmount = ((packet[2] << 1) & 0x08) - ((packet[0] >> 4) & 0x07);
