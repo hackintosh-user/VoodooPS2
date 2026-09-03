@@ -5,11 +5,20 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Bootstrap VoodooInput
+      - uses: actions/checkout@v4
+        with:
+          repository: acidanthera/MacKernelSDK
+          path: MacKernelSDK
+      - name: CI Bootstrap
         run: |
-          src=$(curl -Lfs https://raw.githubusercontent.com/acidanthera/VoodooInput/master/VoodooInput/Scripts/bootstrap.sh) && eval "$src"
-      - name: Build
-        run: xcodebuild -project VoodooPS2.xcodeproj -scheme ALL -configuration Release build
+          src=$(/usr/bin/curl -Lfs https://raw.githubusercontent.com/acidanthera/ocbuild/master/ci-bootstrap.sh) && eval "$src" || exit 1
+      - name: VoodooInput Bootstrap
+        run: |
+          src=$(/usr/bin/curl -Lfs https://raw.githubusercontent.com/acidanthera/VoodooInput/master/VoodooInput/Scripts/bootstrap.sh) && eval "$src" || exit 1
+      - name: Build Debug
+        run: xcodebuild -jobs 1 -configuration Debug
+      - name: Build Release
+        run: xcodebuild -jobs 1 -configuration Release
       - uses: actions/upload-artifact@v4
         with:
           name: VoodooPS2-kexts
