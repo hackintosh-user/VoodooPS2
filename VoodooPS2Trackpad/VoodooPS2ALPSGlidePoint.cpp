@@ -692,29 +692,41 @@ void ApplePS2ALPSGlidePoint::alps_process_packet_v1_v2(UInt8 *packet) {
 
     // NOTE: x/y decoded above are ABSOLUTE finger positions from the packet,
     // not deltas. voodooTrackpoint's RelativePointer message expects a delta.
-    // Track the last absolute position per touch and send (x - lastx, -(y - lasty))
-    // instead of the raw absolute coordinate. The Y sign flip matches the
-    // correction already applied to the trackstick branch above (dy = -(...))
-    // and the explicit "y_max - y" flip used for V3-V5 in this same file;
-    // the V1/V2 path was simply missing both the delta and the flip.
+    // Track the last absolute position per touch and send (x - lastx, y - lasty)
+    // instead of the raw absolute coordinate. (Confirmed on real hardware: no
+    // extra sign flip needed on Y for this device - the raw packet's Y already
+    // matches screen-down-positive once it's a real delta instead of a raw
+    // absolute value being misused as one.)
+    //
+    // Also: buttons were previously only ever forwarded inside the z > 30
+    // branch, meaning a physical button press that doesn't also cross the
+    // finger-contact threshold (e.g. clicking without dragging) never reached
+    // voodooTrackpoint at all. Track the last button state and send a
+    // zero-motion event whenever it changes, even with no finger contact.
     static int lastAlpsV1V2X = 0;
     static int lastAlpsV1V2Y = 0;
     static bool alpsV1V2TouchActive = false;
+    static int lastAlpsV1V2Buttons = 0;
 
     if (z > 30) {
         int dx = 0, dy = 0;
         if (alpsV1V2TouchActive) {
             dx = x - lastAlpsV1V2X;
-            dy = -(y - lastAlpsV1V2Y);
+            dy = y - lastAlpsV1V2Y;
         }
         lastAlpsV1V2X = x;
         lastAlpsV1V2Y = y;
         alpsV1V2TouchActive = true;
+        lastAlpsV1V2Buttons = buttons;
         voodooTrackpoint(kIOMessageVoodooTrackpointRelativePointer, dx, dy, buttons);
     } else {
         // Finger lifted (or not pressing hard enough) - reset so the next
         // touch-down doesn't compute a huge jump from a stale last position.
         alpsV1V2TouchActive = false;
+        if (buttons != lastAlpsV1V2Buttons) {
+            lastAlpsV1V2Buttons = buttons;
+            voodooTrackpoint(kIOMessageVoodooTrackpointRelativePointer, 0, 0, buttons);
+        }
     }
 
     if (priv.flags & ALPS_WHEEL) {
