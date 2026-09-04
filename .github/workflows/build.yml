@@ -17,4 +17,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: VoodooPS2-kexts
-          path: build/Release/*.kext
+          path: build/Products/Release/VoodooPS2Controller.kext
+ 
